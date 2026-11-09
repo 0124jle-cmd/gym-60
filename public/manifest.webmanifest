@@ -1,0 +1,10 @@
+{
+  "name": "GYM 60",
+  "short_name": "GYM 60",
+  "start_url": "/gym-60/",
+  "scope": "/gym-60/",
+  "display": "standalone",
+  "background_color": "#101010",
+  "theme_color": "#101010",
+  "icons": []
+}
