@@ -30,6 +30,7 @@ export const PROGRAM: Record<DayKey, { label: string; title: string; exercises: 
       ex("Leg Press", 3, 10, 12, 5),
       ex("Lateral Raises", 3, 12, 15, 1),
       ex("Dumbbell Shrugs", 2, 10, 15, 2),
+      ex("Seated Dips", 3, 10, 15),
     ],
   },
   wed: {
