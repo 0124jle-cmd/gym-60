@@ -101,6 +101,7 @@ export interface AppData {
   body: BodyEntry[];
   active: ActiveWorkout | null;
   restDefault: number;
+  customProgram?: Record<DayKey, ExerciseDef[]>;
 }
 
 export const STORAGE_KEY = "gym60:v1";
@@ -112,6 +113,7 @@ export const defaultData = (): AppData => ({
   body: [],
   active: null,
   restDefault: 90,
+  customProgram: undefined,
 });
 
 export function isAppData(x: unknown): x is AppData {
@@ -173,7 +175,7 @@ export function suggest(def: Pick<ExerciseDef, "min" | "max" | "step">, last?: E
   return { weight: w, kind: "reps", text: `Stay at ${w} kg and aim for +1 rep per set (up to ${def.max}).` };
 }
 
-export function newWorkout(day: DayKey, sessions: Session[], core: boolean): ActiveWorkout {
+export function newWorkout(day: DayKey, sessions: Session[], core: boolean, program = PROGRAM[day].exercises): ActiveWorkout {
   const mk = (d: ExerciseDef): ExerciseLog => {
     const s = suggest(d, lastLog(sessions, d.id));
     const w = s.weight != null ? String(s.weight) : "";
@@ -189,7 +191,7 @@ export function newWorkout(day: DayKey, sessions: Session[], core: boolean): Act
     day,
     startedAt: Date.now(),
     core,
-    exercises: PROGRAM[day].exercises.map(mk),
+    exercises: program.map(mk),
     coreLogs: CORE.map(mk),
   };
 }
