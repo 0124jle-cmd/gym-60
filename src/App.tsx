@@ -71,12 +71,12 @@ function Train({ data, update }: { data: AppData; update: (f: (d: AppData) => Ap
       <div className="space-y-4">
         <div className="grid grid-cols-3 gap-2 rounded-2xl bg-muted p-1">
           {(Object.keys(PROGRAM) as DayKey[]).map((k) => (
-            <button key={k} onClick={() => setDay(k)} className={cn("min-h-12 rounded-xl font-display text-lg font-bold uppercase", day === k ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>
+            <button key={k} onClick={() => { setDay(k); setEditing(false); }} className={cn("min-h-12 rounded-xl font-display text-lg font-bold uppercase", day === k ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>
               {PROGRAM[k].label}
             </button>
           ))}
         </div>
-        {editing ? <WorkoutEditor exercises={plan.exercises} onSave={(exercises) => { update(d => ({...d, customProgram: {...(d.customProgram ?? {mon: PROGRAM.mon.exercises, wed: PROGRAM.wed.exercises, fri: PROGRAM.fri.exercises}), [day]: exercises}})); setEditing(false); }} onCancel={() => setEditing(false)} /> : <WarmUp />}
+        {editing ? <WorkoutEditor key={day} exercises={plan.exercises} onSave={(exercises) => { update(d => ({...d, customProgram: {...(d.customProgram ?? {mon: PROGRAM.mon.exercises, wed: PROGRAM.wed.exercises, fri: PROGRAM.fri.exercises}), [day]: exercises}})); setEditing(false); }} onCancel={() => setEditing(false)} /> : <WarmUp />}
         <section className="rounded-2xl border border-border bg-card p-4">
           <div className="flex items-center justify-between"><h2 className="font-display text-2xl font-bold uppercase">{plan.title}</h2><button className="rounded-xl bg-secondary px-3 py-2 text-sm font-semibold" onClick={() => setEditing(v => !v)}>{editing ? "Close editor" : "Edit workout"}</button></div>
           <ul className="mt-3 divide-y divide-border">
@@ -355,8 +355,10 @@ function Progress({ data, update }: { data: AppData; update: (f: (d: AppData) =>
   const allEx = useMemo(() => {
     const m = new Map<string, string>();
     Object.values(PROGRAM).forEach((p) => p.exercises.forEach((e) => m.set(e.id, e.name)));
+    Object.values(data.customProgram ?? {}).forEach((es) => es.forEach((e) => m.set(e.id, e.name)));
+    data.sessions.forEach((session) => session.exercises.forEach((e) => { if (!m.has(e.id)) m.set(e.id, e.name); }));
     return [...m];
-  }, []);
+  }, [data.customProgram, data.sessions]);
   const [exId, setExId] = useState(allEx[0]![0]);
 
   const body = [...data.body].sort((a, b) => a.date.localeCompare(b.date));
