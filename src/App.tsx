@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Dumbbell, LineChart, Database, Timer, Flame, Plus, Trash2, Download, Upload, ChevronDown, X } from "lucide-react";
 import {
-  PROGRAM, CORE, type AppData, type DayKey, type ExerciseLog, type ActiveWorkout, type BodyEntry,
+  PROGRAM, CORE, type ExerciseDef, type AppData, type DayKey, type ExerciseLog, type ActiveWorkout, type BodyEntry,
   defaultData, loadData, saveData, newWorkout, todayKey, fmt, suggest, lastLog, isAppData,
 } from "./lib/gym";
 import { cn } from "./lib/utils";
@@ -62,22 +62,23 @@ export default function App() {
 function Train({ data, update }: { data: AppData; update: (f: (d: AppData) => AppData) => void }) {
   const [day, setDay] = useState<DayKey>(() => todayKey());
   const [core, setCore] = useState(false);
+  const [editing, setEditing] = useState(false);
   const active = data.active;
 
   if (!active) {
-    const plan = PROGRAM[day];
+    const plan = { ...PROGRAM[day], exercises: data.customProgram?.[day] ?? PROGRAM[day].exercises };
     return (
       <div className="space-y-4">
         <div className="grid grid-cols-3 gap-2 rounded-2xl bg-muted p-1">
           {(Object.keys(PROGRAM) as DayKey[]).map((k) => (
-            <button key={k} onClick={() => setDay(k)} className={cn("min-h-12 rounded-xl font-display text-lg font-bold uppercase", day === k ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>
+            <button key={k} onClick={() => { setDay(k); setEditing(false); }} className={cn("min-h-12 rounded-xl font-display text-lg font-bold uppercase", day === k ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>
               {PROGRAM[k].label}
             </button>
           ))}
         </div>
-        <WarmUp />
+        {editing ? <WorkoutEditor key={day} exercises={plan.exercises} onSave={(exercises) => { update(d => ({...d, customProgram: {...(d.customProgram ?? {mon: PROGRAM.mon.exercises, wed: PROGRAM.wed.exercises, fri: PROGRAM.fri.exercises}), [day]: exercises}})); setEditing(false); }} onCancel={() => setEditing(false)} /> : <WarmUp />}
         <section className="rounded-2xl border border-border bg-card p-4">
-          <h2 className="font-display text-2xl font-bold uppercase">{plan.title}</h2>
+          <div className="flex items-center justify-between"><h2 className="font-display text-2xl font-bold uppercase">{plan.title}</h2><button className="rounded-xl bg-secondary px-3 py-2 text-sm font-semibold" onClick={() => setEditing(v => !v)}>{editing ? "Close editor" : "Edit workout"}</button></div>
           <ul className="mt-3 divide-y divide-border">
             {plan.exercises.map((e) => {
               const s = suggest(e, lastLog(data.sessions, e.id));
@@ -96,7 +97,7 @@ function Train({ data, update }: { data: AppData; update: (f: (d: AppData) => Ap
           <span><span className="font-semibold">Add core finisher</span><br /><span className="text-sm text-muted-foreground">Dead bugs + reverse crunch, 2 sets each</span></span>
           <input type="checkbox" checked={core} onChange={(e) => setCore(e.target.checked)} className="h-6 w-6 accent-primary" />
         </label>
-        <button onClick={() => update((d) => ({ ...d, active: newWorkout(day, d.sessions, core) }))} className="shadow-glow min-h-16 w-full rounded-2xl bg-primary font-display text-2xl font-extrabold uppercase text-primary-foreground active:scale-[0.98]">
+        <button disabled={editing} onClick={() => update((d) => ({ ...d, active: newWorkout(day, d.sessions, core, d.customProgram?.[day] ?? PROGRAM[day].exercises) }))} className="shadow-glow min-h-16 w-full rounded-2xl bg-primary font-display text-2xl font-extrabold uppercase text-primary-foreground active:scale-[0.98]">
           Start {plan.title}
         </button>
       </div>
@@ -104,6 +105,38 @@ function Train({ data, update }: { data: AppData; update: (f: (d: AppData) => Ap
   }
 
   return <ActiveView data={data} active={active} update={update} />;
+}
+
+
+function WorkoutEditor({ exercises, onSave, onCancel }: { exercises: ExerciseDef[]; onSave: (v: ExerciseDef[]) => void; onCancel: () => void }) {
+  const [draft, setDraft] = useState<ExerciseDef[]>(() => exercises.map(e => ({...e})));
+  const patch = (i: number, p: Partial<ExerciseDef>) => setDraft(v => v.map((e,j) => i === j ? {...e,...p} : e));
+  const move = (i: number, delta: number) => setDraft(v => {
+    const j = i + delta;
+    if (j < 0 || j >= v.length) return v;
+    const next = [...v]; [next[i],next[j]] = [next[j],next[i]]; return next;
+  });
+  const valid = draft.length > 0 && draft.every(e => e.name.trim() && Number.isInteger(e.sets) && e.sets >= 1 && e.sets <= 12 && Number.isInteger(e.min) && e.min >= 1 && Number.isInteger(e.max) && e.max >= e.min && e.max <= 100 && Number.isFinite(e.step) && e.step >= 0);
+  return <section className="space-y-3 rounded-2xl border border-primary bg-card p-4">
+    <h2 className="font-display text-xl font-bold uppercase">Edit exercises</h2>
+    <p className="text-xs text-muted-foreground">Changes apply to future workouts. Previous sessions stay saved.</p>
+    {draft.map((e,i) => <div key={e.id} className="space-y-2 rounded-xl border border-border p-3">
+      <div className="flex gap-2">
+        <input aria-label="Exercise name" className="min-w-0 flex-1 rounded-lg bg-muted p-2" value={e.name} onChange={ev => patch(i,{name:ev.target.value})} />
+        <button aria-label="Move up" disabled={i===0} onClick={() => move(i,-1)} className="px-2 disabled:opacity-30">↑</button>
+        <button aria-label="Move down" disabled={i===draft.length-1} onClick={() => move(i,1)} className="px-2 disabled:opacity-30">↓</button>
+        <button aria-label="Remove exercise" onClick={() => setDraft(v => v.filter((_,j)=>j!==i))} className="text-destructive"><Trash2 className="h-5 w-5"/></button>
+      </div>
+      <div className="grid grid-cols-4 gap-2">
+        {([["Sets","sets"],["Min reps","min"],["Max reps","max"],["Step kg","step"]] as const).map(([label,key]) => <label key={key} className="text-xs text-muted-foreground">{label}<input type="number" min={key==="step"?0:1} step={key==="step"?"0.5":"1"} className="mt-1 w-full rounded-lg bg-muted p-2 text-foreground" value={e[key]} onChange={ev => patch(i,{[key]:Number(ev.target.value)})}/></label>)}
+      </div>
+    </div>)}
+    <button className="w-full rounded-xl border border-dashed border-border p-3 font-semibold" onClick={() => setDraft(v => [...v,{id:"custom-"+Date.now()+"-"+v.length,name:"New exercise",sets:3,min:8,max:12,step:2.5}])}><Plus className="mr-1 inline h-4 w-4"/>Add exercise</button>
+    <div className="flex gap-2">
+      <button className="flex-1 rounded-xl bg-secondary p-3 font-semibold" onClick={onCancel}>Cancel</button>
+      <button disabled={!valid} className="flex-1 rounded-xl bg-primary p-3 font-semibold text-primary-foreground disabled:opacity-40" onClick={() => onSave(draft.map(e => ({...e,name:e.name.trim()})))}>Save workout</button>
+    </div>
+  </section>;
 }
 
 function WarmUp() {
@@ -233,7 +266,7 @@ function ActiveView({ data, active, update }: { data: AppData; active: ActiveWor
       </section>
 
       {active.exercises.map((e, i) => (
-        <ExerciseCard key={e.id + i} log={e} hint={suggest(PROGRAM[active.day].exercises[i] ?? { min: e.min, max: e.max, step: 2.5 }, lastLog(data.sessions, e.id))} onSet={(si, p) => setLog("exercises", i, si, p)} onToggle={(si, d) => toggle("exercises", i, si, d)} />
+        <ExerciseCard key={e.id + i} log={e} hint={suggest((data.customProgram?.[active.day] ?? PROGRAM[active.day].exercises).find(x => x.id === e.id) ?? { min: e.min, max: e.max, step: 2.5 }, lastLog(data.sessions, e.id))} onSet={(si, p) => setLog("exercises", i, si, p)} onToggle={(si, d) => toggle("exercises", i, si, d)} />
       ))}
       {active.core && (
         <>
@@ -322,8 +355,10 @@ function Progress({ data, update }: { data: AppData; update: (f: (d: AppData) =>
   const allEx = useMemo(() => {
     const m = new Map<string, string>();
     Object.values(PROGRAM).forEach((p) => p.exercises.forEach((e) => m.set(e.id, e.name)));
+    Object.values(data.customProgram ?? {}).forEach((es) => es.forEach((e) => m.set(e.id, e.name)));
+    data.sessions.forEach((session) => session.exercises.forEach((e) => { if (!m.has(e.id)) m.set(e.id, e.name); }));
     return [...m];
-  }, []);
+  }, [data.customProgram, data.sessions]);
   const [exId, setExId] = useState(allEx[0]![0]);
 
   const body = [...data.body].sort((a, b) => a.date.localeCompare(b.date));
